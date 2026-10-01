@@ -4,14 +4,12 @@ import threading
 import requests
 import urllib3
 import json
-import asyncio
 from datetime import datetime
 from flask import Flask, request, jsonify
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ==================== CONFIG ====================
-API_PORT = 5000
 NUM_WORKERS = 30
 AUTO_INTERVAL_MINUTES = 2  # Har 2 minute mein chalega
 AUTO_EMAILS_FILE = "auto_emails.json"
@@ -40,7 +38,7 @@ def load_auto_emails():
         else:
             auto_emails_list = []
             save_auto_emails()
-        print(f"[+] Loaded {len(auto_emails_list)} emails")
+        print(f"[+] Loaded {len(auto_emails_list)} emails: {auto_emails_list}")
     except Exception as e:
         print(f"[!] Load error: {e}")
         auto_emails_list = []
@@ -57,7 +55,7 @@ def save_auto_emails():
 def save_results():
     try:
         with open(RESULTS_FILE, 'w') as f:
-            json.dump(results_history[-500:], f, indent=4)  # last 500
+            json.dump(results_history[-500:], f, indent=4)
     except Exception as e:
         print(f"[!] Save results error: {e}")
 
@@ -129,9 +127,9 @@ def blacklist_email(email):
     return False, "UNKNOWN ERROR OCCURRED"
 
 
-# ==================== AUTO BLACKLIST JOB (Har 2 minute) ====================
+# ==================== AUTO BLACKLIST JOB ====================
 def run_auto_blacklist():
-    """Ye function har 2 minute mein auto emails ko blacklist karega"""
+    """Har 2 minute mein auto emails ko blacklist karega"""
     if not auto_emails_list:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Auto list empty, skipping...")
         return
@@ -176,8 +174,7 @@ def run_auto_blacklist():
 def auto_scheduler():
     """Background thread - har 2 minute mein auto blacklist chalata hai"""
     print(f"[+] Auto scheduler started (every {AUTO_INTERVAL_MINUTES} minute)")
-    # Start mein pehle 10 second wait
-    time.sleep(10)
+    time.sleep(10)  # bot start hone ke 10 sec baad pehli baar
 
     while True:
         try:
@@ -185,7 +182,6 @@ def auto_scheduler():
         except Exception as e:
             print(f"[!] Auto job error: {e}")
 
-        # Har 2 minute (120 seconds) wait
         print(f"[+] Next auto-run in {AUTO_INTERVAL_MINUTES} minute(s)...")
         time.sleep(AUTO_INTERVAL_MINUTES * 60)
 
@@ -200,6 +196,7 @@ def home():
         "interval": f"{AUTO_INTERVAL_MINUTES} minutes",
         "total_emails": len(auto_emails_list),
         "total_results": len(results_history),
+        "emails": auto_emails_list,
         "endpoints": {
             "POST /blacklist": "Blacklist single email now",
             "POST /add": "Add email to auto list",
@@ -345,6 +342,42 @@ def api_clear():
     save_auto_emails()
     return jsonify({
         "success": True,
+        "cleared": count,
+        "message": "Auto list cleared"
+    })
+
+
+# ==================== AUTO START ON IMPORT (RENDER KE LIYE) ====================
+def _start_background_jobs():
+    """Render pe gunicorn se start hone pe bhi scheduler chalega"""
+    try:
+        load_auto_emails()
+        scheduler_thread = threading.Thread(target=auto_scheduler, daemon=True)
+        scheduler_thread.start()
+        print("[+] Background scheduler started on import")
+        print(f"[+] Auto blacklist will run every {AUTO_INTERVAL_MINUTES} minutes")
+    except Exception as e:
+        print(f"[!] Failed to start scheduler: {e}")
+
+
+# Ye line IMPORTANT hai — module import hote hi scheduler chalu karo
+_start_background_jobs()
+
+
+# ==================== MAIN ====================
+if __name__ == '__main__':
+    print("=" * 60)
+    print("  EMAIL BLACKLISTER API")
+    print("=" * 60)
+    print(f"[+] Workers per email: {NUM_WORKERS}")
+    print(f"[+] Auto interval: {AUTO_INTERVAL_MINUTES} minute")
+    print("=" * 60)
+
+    port = int(os.environ.get("PORT", 5000))
+    print(f"[+] Server starting on http://0.0.0.0:{port}")
+    print("=" * 60)
+
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True),
         "cleared": count,
         "message": "Auto list cleared"
     })
