@@ -11,7 +11,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ==================== CONFIG ====================
 NUM_WORKERS = 30
-AUTO_INTERVAL_MINUTES = 2  # Har 2 minute mein chalega
+AUTO_INTERVAL_MINUTES = 2
 AUTO_EMAILS_FILE = "auto_emails.json"
 RESULTS_FILE = "blacklist_results.json"
 
@@ -38,9 +38,9 @@ def load_auto_emails():
         else:
             auto_emails_list = []
             save_auto_emails()
-        print(f"[+] Loaded {len(auto_emails_list)} emails: {auto_emails_list}")
+        print("[+] Loaded " + str(len(auto_emails_list)) + " emails: " + str(auto_emails_list))
     except Exception as e:
-        print(f"[!] Load error: {e}")
+        print("[!] Load error: " + str(e))
         auto_emails_list = []
 
 
@@ -49,7 +49,7 @@ def save_auto_emails():
         with open(AUTO_EMAILS_FILE, 'w') as f:
             json.dump(auto_emails_list, f, indent=4)
     except Exception as e:
-        print(f"[!] Save error: {e}")
+        print("[!] Save error: " + str(e))
 
 
 def save_results():
@@ -57,7 +57,7 @@ def save_results():
         with open(RESULTS_FILE, 'w') as f:
             json.dump(results_history[-500:], f, indent=4)
     except Exception as e:
-        print(f"[!] Save results error: {e}")
+        print("[!] Save results error: " + str(e))
 
 
 # ==================== WORKER ====================
@@ -99,7 +99,6 @@ def worker(email, gen):
 
 
 def blacklist_email(email):
-    """Blocking blacklist function - safe to call from threads"""
     global any_success, error_event, stop_event, generation
 
     generation += 1
@@ -129,21 +128,20 @@ def blacklist_email(email):
 
 # ==================== AUTO BLACKLIST JOB ====================
 def run_auto_blacklist():
-    """Har 2 minute mein auto emails ko blacklist karega"""
     if not auto_emails_list:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Auto list empty, skipping...")
+        print("[" + datetime.now().strftime('%H:%M:%S') + "] Auto list empty, skipping...")
         return
 
-    print(f"\n{'='*60}")
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] AUTO BLACKLIST STARTED")
-    print(f"[+] Total emails: {len(auto_emails_list)}")
-    print(f"{'='*60}")
+    print("=" * 60)
+    print("[" + datetime.now().strftime('%H:%M:%S') + "] AUTO BLACKLIST STARTED")
+    print("[+] Total emails: " + str(len(auto_emails_list)))
+    print("=" * 60)
 
     summary = {"success": 0, "failed": 0, "skipped": 0, "total": len(auto_emails_list)}
 
     emails_copy = list(auto_emails_list)
     for email in emails_copy:
-        print(f"[>] Processing: {email}")
+        print("[>] Processing: " + email)
         success, msg = blacklist_email(email)
 
         record = {
@@ -157,32 +155,31 @@ def run_auto_blacklist():
 
         if success:
             summary["success"] += 1
-            print(f"[✓] SUCCESS: {email}")
+            print("[OK] SUCCESS: " + email)
         elif "ALREADY" in msg:
             summary["skipped"] += 1
-            print(f"[!] SKIPPED: {email}")
+            print("[!] SKIPPED: " + email)
         else:
             summary["failed"] += 1
-            print(f"[✗] FAILED: {email}")
+            print("[X] FAILED: " + email)
 
         time.sleep(2)
 
-    print(f"\n[+] AUTO BLACKLIST COMPLETE: {summary}")
-    print(f"{'='*60}\n")
+    print("[+] AUTO BLACKLIST COMPLETE: " + str(summary))
+    print("=" * 60)
 
 
 def auto_scheduler():
-    """Background thread - har 2 minute mein auto blacklist chalata hai"""
-    print(f"[+] Auto scheduler started (every {AUTO_INTERVAL_MINUTES} minute)")
-    time.sleep(10)  # bot start hone ke 10 sec baad pehli baar
+    print("[+] Auto scheduler started (every " + str(AUTO_INTERVAL_MINUTES) + " minute)")
+    time.sleep(10)
 
     while True:
         try:
             run_auto_blacklist()
         except Exception as e:
-            print(f"[!] Auto job error: {e}")
+            print("[!] Auto job error: " + str(e))
 
-        print(f"[+] Next auto-run in {AUTO_INTERVAL_MINUTES} minute(s)...")
+        print("[+] Next auto-run in " + str(AUTO_INTERVAL_MINUTES) + " minute(s)...")
         time.sleep(AUTO_INTERVAL_MINUTES * 60)
 
 
@@ -193,7 +190,7 @@ def home():
     return jsonify({
         "status": "online",
         "service": "Email Blacklister API",
-        "interval": f"{AUTO_INTERVAL_MINUTES} minutes",
+        "interval": str(AUTO_INTERVAL_MINUTES) + " minutes",
         "total_emails": len(auto_emails_list),
         "total_results": len(results_history),
         "emails": auto_emails_list,
@@ -211,14 +208,13 @@ def home():
 
 @app.route('/blacklist', methods=['POST'])
 def api_blacklist():
-    """Turant ek email blacklist karo"""
     data = request.get_json() or {}
     email = data.get('email', '').strip()
 
     if not email or '@' not in email or '.' not in email:
         return jsonify({"success": False, "error": "Invalid email"}), 400
 
-    print(f"[API] Blacklisting now: {email}")
+    print("[API] Blacklisting now: " + email)
     success, msg = blacklist_email(email)
 
     record = {
@@ -241,7 +237,6 @@ def api_blacklist():
 
 @app.route('/add', methods=['POST'])
 def api_add():
-    """Auto list mein email add karo (har 2 min blacklist hoga)"""
     data = request.get_json() or {}
     emails = data.get('emails', [])
 
@@ -271,7 +266,6 @@ def api_add():
 
 @app.route('/remove', methods=['POST'])
 def api_remove():
-    """Auto list se email remove karo"""
     data = request.get_json() or {}
     emails = data.get('emails', [])
 
@@ -298,7 +292,6 @@ def api_remove():
 
 @app.route('/list', methods=['GET'])
 def api_list():
-    """Auto list dekho"""
     return jsonify({
         "total": len(auto_emails_list),
         "emails": auto_emails_list,
@@ -308,7 +301,6 @@ def api_list():
 
 @app.route('/results', methods=['GET'])
 def api_results():
-    """Recent blacklist results"""
     limit = request.args.get('limit', default=50, type=int)
     return jsonify({
         "total": len(results_history),
@@ -318,11 +310,9 @@ def api_results():
 
 @app.route('/run-now', methods=['POST'])
 def api_run_now():
-    """Abhi turant auto blacklist chala do (manually trigger)"""
     if not auto_emails_list:
         return jsonify({"success": False, "error": "Auto list is empty"}), 400
 
-    # Background thread mein chala do taaki API block na ho
     t = threading.Thread(target=run_auto_blacklist, daemon=True)
     t.start()
 
@@ -335,7 +325,6 @@ def api_run_now():
 
 @app.route('/clear', methods=['DELETE'])
 def api_clear():
-    """Auto list clear karo"""
     global auto_emails_list
     count = len(auto_emails_list)
     auto_emails_list.clear()
@@ -344,6 +333,38 @@ def api_clear():
         "success": True,
         "cleared": count,
         "message": "Auto list cleared"
+    })
+
+
+# ==================== AUTO START ON IMPORT ====================
+def _start_background_jobs():
+    try:
+        load_auto_emails()
+        scheduler_thread = threading.Thread(target=auto_scheduler, daemon=True)
+        scheduler_thread.start()
+        print("[+] Background scheduler started on import")
+        print("[+] Auto blacklist will run every " + str(AUTO_INTERVAL_MINUTES) + " minutes")
+    except Exception as e:
+        print("[!] Failed to start scheduler: " + str(e))
+
+
+_start_background_jobs()
+
+
+# ==================== MAIN ====================
+if __name__ == '__main__':
+    print("=" * 60)
+    print("  EMAIL BLACKLISTER API")
+    print("=" * 60)
+    print("[+] Workers per email: " + str(NUM_WORKERS))
+    print("[+] Auto interval: " + str(AUTO_INTERVAL_MINUTES) + " minute")
+    print("=" * 60)
+
+    port = int(os.environ.get("PORT", 5000))
+    print("[+] Server starting on http://0.0.0.0:" + str(port))
+    print("=" * 60)
+
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)to list cleared"
     })
 
 
